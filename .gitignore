@@ -1,0 +1,15 @@
+# local python venv
+venvBot/
+
+# folder with a token.json file for bot API
+config/*
+# exept examples
+!config/token_stub.json
+
+# files used for local development
+tmp/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
