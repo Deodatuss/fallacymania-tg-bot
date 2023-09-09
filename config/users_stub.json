@@ -1,0 +1,10 @@
+{
+    "users": [
+        {
+            "id": "id-stub",
+            "full_name": "full_name-stub",
+            "username": "username-stub",
+            "language_code": "code-stub"
+        }
+    ]
+}

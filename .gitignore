@@ -4,7 +4,7 @@ venvBot/
 # folder with a token.json file for bot API
 config/*
 # exept examples and stubs
-!config/token_stub.json
+!config/*_stub.json
 
 # files used for local development, like raw JSON data
 tmp/
