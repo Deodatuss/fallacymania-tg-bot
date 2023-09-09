@@ -69,7 +69,6 @@ async def get_deck(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 def main() -> None:
     """Run the bot."""
     application = ApplicationBuilder().token(get_token()).build()
-
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("save", save))
     application.add_handler(CommandHandler("get_deck", get_deck))
