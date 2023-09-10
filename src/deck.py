@@ -7,7 +7,7 @@ import asyncio
 import json
 from time import sleep
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update
 from telegram.ext import (
     ApplicationBuilder,
     MessageHandler,
@@ -44,6 +44,7 @@ async def save(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if sticker_set_name:
         sticker_set = await context.bot.get_sticker_set(sticker_set_name)
 
+        # save raw sticker set
         with open(_RAW_JSON_STICKERSET_PATH, "w") as json_file:
             json_file.write(sticker_set.to_json())
 
@@ -78,4 +79,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

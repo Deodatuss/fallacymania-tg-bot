@@ -13,6 +13,7 @@ def entity_data(update: Update) -> dict:
 
     return {
         user.id: {
+            "chat_id": update.effective_chat.id,
             "full_name": user.full_name,
             "username": user.username,
             "language_code": user.language_code,

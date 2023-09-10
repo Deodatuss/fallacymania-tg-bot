@@ -12,10 +12,11 @@ _RAW_JSON_STICKERSET_PATH = constants.RAW_JSON_STICKERSET_PATH
 _JSON_DECK_PATH = constants.JSON_DECK_PATH
 
 
+# TODO: split into functions to only convert and only read/write files
 async def stickerset_to_deck_converter() -> None:
     """
     Reads raw JSON file with sticker set info, trims most data from
-    'stickers' list except emoji, file_id and full file_size.
+    'stickers' list except emoji, file_id, full file_size.
     Saves trimmed data to another JSON file.
     """
 
@@ -23,17 +24,18 @@ async def stickerset_to_deck_converter() -> None:
         raw_set_data: dict = json.load(file)
     deck_data = dict.fromkeys(raw_set_data.keys(), [])
 
-    # kopy sticker set meta-info (without stickers)
+    # copy sticker set meta-info (without stickers)
     for key in deck_data:
         if key != "stickers":
             deck_data[key] = raw_set_data[key]
 
-    # kopy only relevant data inside stickers list
+    # copy only relevant data inside stickers list
     for sticker in raw_set_data["stickers"]:
         deck_data["stickers"].append(
             {
                 "emoji": sticker["emoji"],
                 "file_id": sticker["file_id"],
+                "file_unique_id": sticker["file_unique_id"],
                 "file_size": sticker["file_size"],
             }
         )
