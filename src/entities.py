@@ -6,6 +6,15 @@ import constants
 
 _USERS_FILE = constants.JSON_USERS_PATH
 _PLAYERS_FILE = constants.JSON_PLAYERS_PATH
+_JSON_DECK_PATH = constants.JSON_DECK_PATH
+
+
+def get_deck() -> dict:
+    """Returns dict of cards, which is used in game"""
+    with open(_JSON_DECK_PATH, "r") as file:
+        data = json.load(file)
+
+    return data
 
 
 def entity_data(update: Update) -> dict:
