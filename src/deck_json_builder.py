@@ -33,10 +33,11 @@ async def stickerset_to_deck_converter() -> None:
     for sticker in raw_set_data["stickers"]:
         deck_data["stickers"].append(
             {
-                "emoji": sticker["emoji"],
-                "file_id": sticker["file_id"],
-                "file_unique_id": sticker["file_unique_id"],
-                "file_size": sticker["file_size"],
+                sticker["file_unique_id"]: {
+                    "emoji": sticker["emoji"],
+                    "file_id": sticker["file_id"],
+                    "file_size": sticker["file_size"],
+                }
             }
         )
 
