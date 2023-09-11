@@ -1,6 +1,6 @@
 """
-Helper function that takes only relevant data from raw sticker set file
-and saves it into data folder to be used as an actual deck.
+Helper functions, one takes only relevant data from raw sticker set file
+and another saves it into data folder to be used as an actual deck.
 It keeps the original json data structure, but eliminates useless info.
 """
 import json
@@ -43,17 +43,6 @@ async def _stickerset_to_deck_converter(raw_set_data) -> dict:
             "file_id": sticker["file_id"],
             "file_size": sticker["file_size"],
         }
-
-    return deck_data
-
-
-async def read_deck_file() -> dict:
-    """
-    Reads sticker deck file directly, without conversion from raw stickerset.
-    Returns dict with a deck.
-    """
-    with open(_JSON_DECK_PATH, "r") as file:
-        deck_data: dict = json.load(file)
 
     return deck_data
 
