@@ -87,12 +87,19 @@ async def start_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def generate_free_deck(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> list:
+    """
+    Generates the game local memory deck, where cards will be pulled from
+    as game progresses.
+    """
     deck_data = context.bot_data["deck_data"]
     return [i["file_unique_id"] for i in deck_data["stickers"]]
 
 
 async def generate_hands(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """store used cards in debater hands, and leave leftover stickers in a free deck"""
+    """
+    Sends cards to every debater.
+    Stores used cards in debater hands, and leaves leftover stickers in a free deck
+    """
 
     free_deck: list = context.bot_data["free_deck"]
 
@@ -104,23 +111,24 @@ async def generate_hands(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         )
         for i in range(_CARDS_PER_HAND):
             if free_deck.__len__() <= 0:
-                context.bot_data["free_deck"] = await generate_free_deck()
                 update.effective_user.send_message(
                     "free deck was emtied because there are too many debaters or"
-                    " some have too many cards; generated new free deck"
+                    " some have too many cards. Please re-initialize the game"
                 )
-            # pop random card's unique_id from a free deck
-            given_card = free_deck.pop(random.choice(free_deck))
+                break
+            else:
+                # pop random card's unique_id from a free deck
+                given_card = free_deck.pop(random.choice(free_deck))
 
-            # get file_id which is used to send a sticker
-            file_id = context.bot_data["deck_data"][given_card]["file_id"]
+                # get file_id which is used to send a sticker
+                file_id = context.bot_data["deck_data"][given_card]["file_id"]
 
-            message: Message = context.bot.send_sticker(
-                chat_id=player["chat_id"], sticker=file_id
-            )
+                message: Message = context.bot.send_sticker(
+                    chat_id=player["chat_id"], sticker=file_id
+                )
 
-            # add this unique_id and it's message_id to user's hand
-            context.bot_data["debater_hand"].update({given_card: message.id})
+                # add this unique_id and it's message_id to user's hand
+                context.bot_data["debater_hand"].update({given_card: message.id})
 
 
 async def guess_card(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -144,6 +152,7 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         #         text="oh hi, game started",
         #     )
 
+        # TODO: initialize score board for guessers and give them attempts to guess
         # broadcast start rules to guessers
         for player in context.bot_data["guesser"]:
             await context.bot.send_message(
@@ -157,38 +166,43 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
 
 async def guess(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if (
-        update.effective_chat.id in context.bot_data["guesser"]
-        and context.bot_data["is_game_started"]
-    ):
-        keyboard = [
-            [
-                InlineKeyboardButton(
-                    debater["full_name"],
-                    callback_data=debater,
-                )
-            ]
-            for debater in context.bot_data["debaters"]
-        ]
+    """
+    Only works during the game; logic is different based on user role.
 
-        reply_markup = InlineKeyboardMarkup(keyboard)
+    Debater: during start of the game, each debater gets his hand of cards.
+    When he wants to use some card, he should either reply with any non-command
+    to desired card from a deck, or send the same card from his sticker pack.
+    This card will then be set as active. If he wants to use another card,
+    he would need to reply to another card or send another sticker.
+    Old one will be deleted, to keep things less cluttered.
 
-        await update.message.reply_text(
-            "Please choose who you're trying to guess: :", reply_markup=reply_markup
-        )
+    Guesser: after sending a sticker user think some debater has used,
+    the keyboard is sent to ask, if user really meant to use this sticker.
+    After confirmation, the global check is initiated in a function guess_buttons.
+    """
+
+    if context.bot_data["is_game_started"]:
+        if update.effective_user.id in context.bot_data["debater"]:
+            # TODO: write code logic in respect to function comment
+            pass
+        if update.effective_chat.id in context.bot_data["guesser"]:
+            # TODO: write code logic in respect to function comment
+            pass
     else:
-        update.message.delete()
-        message: Message = update.message.reply_text("You can't guess a debater yet.")
-        context.bot.delete_message(update.effective_chat.id, message.id)
-    pass
+        update.effective_user.send_message("Sorry, game hasn't started yet.")
 
 
 async def guess_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Parses the CallbackQuery, updates the guess text, and sends request to dabater."""
+    """
+    Parses the CallbackQuery sent by guesser from 'guess' function.
+    Initializes a global check of cards. If card sent by the guesser matches
+    any of active card from debaters, guesser gets a point.
+    If it doesn't match, guesser loses one 'attempt' (until reaches zero).
+    If he has no attempts left, the point is taken from him (can go negative).
+    """
+    # TODO: implement function by adding another CallbackQuery gandler
     query = update.callback_query
     await query.answer()
-
-    # send sticker and keyboard to debater, asking if this is the sticker
 
 
 async def end_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -216,12 +230,25 @@ def main() -> None:
     # load deck so bot could send stickers by their id
     application.bot_data["deck_data"] = entities.get_deck()
 
+    # choose a role when entering the room
     application.add_handler(CommandHandler("start", start))
+    # TODO: CallbackQueryHandlers should use regex pattern matching of query data
+    application.add_handler(CallbackQueryHandler(start_buttons))
+
+    # TODO: add admin function to clear all users roles,
+    # e.g. if there is too much debaters
+
+    # basic game start conditions, progress and end conditions
     application.add_handler(CommandHandler("help", help))
+
+    # during game users mostly interact by first sending card to a bot
+    application.add_handler(MessageHandler(filters.Sticker.ALL, guess))
+
+    # admin fucntion: start game with all conditions (i.e. score, hands and message)
     application.add_handler(CommandHandler("start_game", start_game))
+
+    # admin function: end game, sending game results to all users
     application.add_handler(CommandHandler("end_game", end_game))
-    application.add_handler(CommandHandler("guess", guess))
-    application.add_handler(CallbackQueryHandler(start_buttons, pattern))
 
     application.run_polling()
 
