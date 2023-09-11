@@ -37,15 +37,11 @@ async def _move_to_role(
     User can have only one role (except extra admin role), and his data inside
     dict amongst average roles is not duplicated.
     """
-    all_keys = list(context.bot_data.keys())
+    role_keys = ["debater", "guesser"]
 
     # admins is unique role, which is not dependent on other roles
-    try:
-        all_keys.remove("admin")
-    except ValueError:
-        pass
 
-    for key in all_keys:
+    for key in role_keys:
         # if user is already in average roles dict
         if update.effective_user.id in context.bot_data[key]:
             context.bot_data[key].pop(update.effective_user.id)
@@ -69,7 +65,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def start_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Parses the CallbackQuery and updates the start message text."""
-    query = update.callback_query.from_user
+    query = update.callback_query
     await query.answer()
 
     if query.data == "debater":
@@ -88,11 +84,14 @@ async def generate_free_deck(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> list:
     """
-    Generates the game local memory deck, where cards will be pulled from
+    Generates the game new local memory deck, where cards will be pulled from
     as game progresses.
+    Returns shuffled list of stickers' unique_id.
     """
-    deck_data = context.bot_data["deck_data"]
-    return [i["file_unique_id"] for i in deck_data["stickers"]]
+    deck_stickers = context.bot_data["deck_data"]["stickers"]
+    deck = [key for key in deck_stickers]
+    random.shuffle(deck)
+    return deck
 
 
 async def generate_hands(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -100,35 +99,40 @@ async def generate_hands(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     Sends cards to every debater.
     Stores used cards in debater hands, and leaves leftover stickers in a free deck
     """
-
+    # generate new free deck that will be shrinked as game progresses
+    context.bot_data["free_deck"] = await generate_free_deck(update, context)
     free_deck: list = context.bot_data["free_deck"]
 
     # give N unique stickers to every debater user
-    for player in context.bot_data["debater"]:
-        context.bot.send_message(
-            chat_id=player["chat_id"],
+    for player, values in context.bot_data["debater"].items():
+        await context.bot.send_message(
+            chat_id=values["chat_id"],
             text=f"Your hand have these {_CARDS_PER_HAND} cards:",
         )
         for i in range(_CARDS_PER_HAND):
             if free_deck.__len__() <= 0:
-                update.effective_user.send_message(
+                await update.effective_user.send_message(
                     "free deck was emtied because there are too many debaters or"
                     " some have too many cards. Please re-initialize the game"
                 )
                 break
             else:
-                # pop random card's unique_id from a free deck
-                given_card = free_deck.pop(random.choice(free_deck))
+                # pop random card from a free deck
+                given_card_unique_id = free_deck.pop()
 
                 # get file_id which is used to send a sticker
-                file_id = context.bot_data["deck_data"][given_card]["file_id"]
+                file_id = context.bot_data["deck_data"]["stickers"][
+                    given_card_unique_id
+                ]["file_id"]
 
-                message: Message = context.bot.send_sticker(
-                    chat_id=player["chat_id"], sticker=file_id
+                message: Message = await context.bot.send_sticker(
+                    chat_id=values["chat_id"], sticker=file_id
                 )
 
                 # add this unique_id and it's message_id to user's hand
-                context.bot_data["debater_hand"].update({given_card: message.id})
+                context.bot_data["debater_hand"].update(
+                    {given_card_unique_id: message.id}
+                )
 
 
 async def guess_card(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -139,11 +143,6 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     if context.bot_data["is_game_started"] is True:
         update.message.reply_text("Game already in progress")
     else:
-        deck_data = context.bot_data["deck_data"]
-
-        # generate new free deck that will be shrinked as game progresses
-        context.bot_data["free_deck"] = await generate_free_deck(update, context)
-
         # generate hands and broadcast these hands to debaters
         await generate_hands(update, context)
         # for player in context.bot_data["debater"]:
@@ -226,7 +225,6 @@ def main() -> None:
     application.bot_data["admin"] = {}
     application.bot_data["is_game_started"] = False
     application.bot_data["free_deck"] = []
-
     # load deck so bot could send stickers by their id
     application.bot_data["deck_data"] = entities.get_deck()
 
