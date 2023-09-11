@@ -22,7 +22,7 @@ async def stickerset_to_deck_converter() -> None:
 
     with open(_RAW_JSON_STICKERSET_PATH, "r") as file:
         raw_set_data: dict = json.load(file)
-    deck_data = dict.fromkeys(raw_set_data.keys(), [])
+    deck_data = dict.fromkeys(raw_set_data.keys(), {})
 
     # copy sticker set meta-info (without stickers)
     for key in deck_data:
@@ -31,15 +31,11 @@ async def stickerset_to_deck_converter() -> None:
 
     # copy only relevant data inside stickers list
     for sticker in raw_set_data["stickers"]:
-        deck_data["stickers"].append(
-            {
-                sticker["file_unique_id"]: {
-                    "emoji": sticker["emoji"],
-                    "file_id": sticker["file_id"],
-                    "file_size": sticker["file_size"],
-                }
-            }
-        )
+        deck_data["stickers"][sticker["file_unique_id"]] = {
+            "emoji": sticker["emoji"],
+            "file_id": sticker["file_id"],
+            "file_size": sticker["file_size"],
+        }
 
     with open(_JSON_DECK_PATH, "w") as file:
         json.dump(deck_data, file)
