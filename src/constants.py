@@ -37,8 +37,8 @@ class Guesser(TypedDict):
 
 
 class BotData(TypedDict):
-    debater: Debater
-    guesser: Guesser
+    debater: dict[int, Debater]
+    guesser: dict[int, Guesser]
     free_deck: list
     is_game_started: bool
     deck_data: dict
