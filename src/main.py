@@ -1,5 +1,6 @@
 import random
 import logging
+from time import sleep
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from telegram.ext import (
@@ -81,16 +82,21 @@ async def start_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    if query.data == f"start-{_DEBATERS_DICT_KEY}":
-        await _move_to_role(_DEBATERS_DICT_KEY, update, context)
-        await query.edit_message_text(text=f"You are now a {_DEBATER_NAME}")
-    elif query.data == f"start-{_GUESSERS_DICT_KEY}":
-        await _move_to_role(_GUESSERS_DICT_KEY, update, context)
-        await query.edit_message_text(text=f"You are now a {_GUESSER_NAME}")
-    else:
-        await query.edit_message_text(
-            text=f"Something went wrong with choosing a role."
+    if context.bot_data["is_game_started"]:
+        update.effective_user.send_message(
+            "Sorry, you can't choose a role while active game is in progress."
         )
+    else:
+        if query.data == f"start-{_DEBATERS_DICT_KEY}":
+            await _move_to_role(_DEBATERS_DICT_KEY, update, context)
+            await query.edit_message_text(text=f"You are now a {_DEBATER_NAME}")
+        elif query.data == f"start-{_GUESSERS_DICT_KEY}":
+            await _move_to_role(_GUESSERS_DICT_KEY, update, context)
+            await query.edit_message_text(text=f"You are now a {_GUESSER_NAME}")
+        else:
+            await query.edit_message_text(
+                text="Something went wrong with CallbackQuery."
+            )
 
 
 async def generate_free_deck(
@@ -148,14 +154,6 @@ async def generate_hands(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 )
 
 
-async def guess_card(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if context.bot_data["is_game_started"]:
-        if update.effective_user.id in context.bot_data[""]:
-            pass
-    else:
-        update.effective_user.send_message("Sorry, the game hasn't started yet.")
-
-
 async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if context.bot_data["is_game_started"]:
         update.message.reply_text("Game already in progress")
@@ -186,24 +184,51 @@ async def guess(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     Only works during the game; logic is different based on user role.
 
     Debater: during start of the game, each debater gets his hand of cards.
-    When he wants to use some card, he should either reply with any non-command
-    to desired card from a deck, or send the same card from his sticker pack.
-    This card will then be set as active. If he wants to use another card,
-    he would need to reply to another card or send another sticker.
+    When he wants to use some card, he should send the same card from his sticker pack.
+    This card will then be added to active cards. If he wants to use another card,
+    he would need to send another sticker.
     Old one will be deleted, to keep things less cluttered.
 
     Guesser: after sending a sticker user think some debater has used,
     the keyboard is sent to ask, if user really meant to use this sticker.
     After confirmation, the global check is initiated in a function guess_buttons.
     """
+    data: constants.BotData = context.bot_data
+    if data["is_game_started"]:
+        # if user is a debater
+        if update.effective_user.id in data[_DEBATERS_DICT_KEY]:
+            if (
+                update.effective_message.sticker.file_unique_id
+                in data[_DEBATERS_DICT_KEY]["hand"]
+            ):
+                # add matched sticker to active cards
+                data["active_cards"].add(
+                    update.effective_message.sticker.file_unique_id
+                )
+            else:
+                text_message: Message = update.effective_user.send_message(
+                    "You don't have this sticker in your hand."
+                    "\n(Message and sticker above will be deleted in 7 seconds)"
+                )
+                sleep(7)
+                update.effective_message.delete()
+                text_message.delete()
 
-    if context.bot_data["is_game_started"]:
-        if update.effective_user.id in context.bot_data["debater"]:
-            # TODO: write code logic in respect to function comment
-            pass
-        if update.effective_chat.id in context.bot_data["guesser"]:
-            # TODO: write code logic in respect to function comment
-            pass
+        # if user is a guesser
+        elif update.effective_user.id in data[_GUESSERS_DICT_KEY]:
+            keyboard = [
+                InlineKeyboardButton("Yes", callback_data=f"guess-yes"),
+                InlineKeyboardButton("No", callback_data=f"guess-no"),
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+
+            await update.message.reply_text(
+                "You want to try to guess this card?:", reply_markup=reply_markup
+            )
+        else:
+            update.effective_user.send_message(
+                "Sorry, you don't have a role in active game."
+            )
     else:
         update.effective_user.send_message("Sorry, the game hasn't started yet.")
 
@@ -244,6 +269,7 @@ def main() -> None:
         "is_game_started": False,
         "deck_data": entities.get_deck(),  # load deck so bot could
         # send stickers by their id
+        "active_cards": {},
     }
     application.bot_data = data
 
@@ -259,6 +285,7 @@ def main() -> None:
 
     # during game users mostly interact by first sending card to a bot
     application.add_handler(MessageHandler(filters.Sticker.ALL, guess))
+    application.add_handler(CallbackQueryHandler(guess_buttons, pattern="^guess-"))
 
     # admin fucntion: start game with all conditions (i.e. score, hands and message)
     application.add_handler(CommandHandler("start_game", start_game))
