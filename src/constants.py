@@ -1,4 +1,5 @@
 import os
+from typing import TypedDict
 
 RAW_JSON_STICKERSET_PATH = os.path.join(
     os.path.dirname(__file__), "../tmp/raw_sticker_set.json"
@@ -11,4 +12,33 @@ JSON_PLAYERS_PATH = os.path.join(os.path.dirname(__file__), "../config/players.j
 JSON_USERS_PATH = os.path.join(os.path.dirname(__file__), "../config/players.json")
 
 DEBATERS_DICT_KEY = "debater"
-GESSERS_DICT_KEY = "guesser"
+GUESSERS_DICT_KEY = "guesser"
+
+
+class Debater(TypedDict):
+    chat_id: int
+    full_name: str
+    username: str
+    language_code: str
+    hand: dict[str, int]
+
+
+class Points(TypedDict):
+    score: int
+    attempts: int
+
+
+class Guesser(TypedDict):
+    chat_id: int
+    full_name: str
+    username: str
+    language_code: str
+    points: Points
+
+
+class BotData(TypedDict):
+    debater: Debater
+    guesser: Guesser
+    free_deck: list
+    is_game_started: bool
+    deck_data: dict

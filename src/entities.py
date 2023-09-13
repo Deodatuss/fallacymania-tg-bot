@@ -1,7 +1,5 @@
 import json
 
-from typing import TypedDict
-
 from telegram import Update
 
 import constants
@@ -10,28 +8,7 @@ _USERS_FILE = constants.JSON_USERS_PATH
 _PLAYERS_FILE = constants.JSON_PLAYERS_PATH
 _JSON_DECK_PATH = constants.JSON_DECK_PATH
 _DEBATERS_DICT_KEY = constants.DEBATERS_DICT_KEY
-_GESSERS_DICT_KEY = constants.DEBATERS_DICT_KEY
-
-
-class Debater(TypedDict):
-    chat_id: int
-    full_name: str
-    username: str
-    language_code: str
-    hand: dict[str, int]
-
-
-class Points(TypedDict):
-    score: int
-    attempts: int
-
-
-class Guesser(TypedDict):
-    chat_id: int
-    full_name: str
-    username: str
-    language_code: str
-    points: Points
+_GUESSERS_DICT_KEY = constants.GUESSERS_DICT_KEY
 
 
 def get_deck() -> dict:
@@ -46,7 +23,7 @@ def get_debater(update: Update) -> dict:
     user = update.effective_user
     hand = {}
 
-    data: Debater = {
+    data: constants.Debater = {
         "chat_id": update.effective_chat.id,
         "full_name": user.full_name,
         "username": user.username,
@@ -59,9 +36,9 @@ def get_debater(update: Update) -> dict:
 
 def get_guesser(update: Update) -> dict:
     user = update.effective_user
-    points: Points = {"score": 0, "attempts": 0}
+    points: constants.Points = {"score": 0, "attempts": 0}
 
-    data: Guesser = {
+    data: constants.Guesser = {
         "chat_id": update.effective_chat.id,
         "full_name": user.full_name,
         "username": user.username,
@@ -75,7 +52,7 @@ def get_guesser(update: Update) -> dict:
 def entity_data(bot_data_dict_key: str, update: Update) -> dict:
     if bot_data_dict_key == _DEBATERS_DICT_KEY:
         return get_debater(update)
-    elif bot_data_dict_key == _GESSERS_DICT_KEY:
+    elif bot_data_dict_key == _GUESSERS_DICT_KEY:
         return get_guesser(update)
     raise KeyError
 
