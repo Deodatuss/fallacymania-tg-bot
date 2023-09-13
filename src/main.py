@@ -158,19 +158,16 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     if context.bot_data["is_game_started"]:
         update.message.reply_text("Game already in progress")
     else:
-        # generate hands and broadcast these hands to debaters
         await generate_hands(update, context)
-        # for player in context.bot_data["debater"]:
-        #     await context.bot.send_message(
-        #         chat_id=context.bot_data["debater"][player]["chat_id"],
-        #         text="oh hi, game started",
-        #     )
 
-        # TODO: initialize score board for guessers and give them attempts to guess
-        # broadcast start rules to guessers
-        for player in context.bot_data["guesser"]:
+        # TODO: unhardcode startes attempts
+        # (should be a function based on rules and number of guessers)
+        for player in context.bot_data[_GUESSERS_DICT_KEY]:
+            context.bot_data[_GUESSERS_DICT_KEY][player]["points"]["score"] = 0
+            context.bot_data[_GUESSERS_DICT_KEY][player]["points"]["attempts"] = 15
+
             await context.bot.send_message(
-                chat_id=context.bot_data["guesser"][player]["chat_id"],
+                chat_id=context.bot_data[_GUESSERS_DICT_KEY][player]["chat_id"],
                 text=(
                     "Game started. Send cards you want to guess, then you'll"
                     " be able to pick a debater."
@@ -216,6 +213,9 @@ async def guess(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
         # if user is a guesser
         elif update.effective_user.id in data[_GUESSERS_DICT_KEY]:
+            sticker_id = update.effective_message.sticker.file_unique_id
+            context.user_data["card_for_global_check"] = sticker_id
+
             keyboard = [
                 InlineKeyboardButton("Yes", callback_data=f"guess-yes"),
                 InlineKeyboardButton("No", callback_data=f"guess-no"),
@@ -233,6 +233,33 @@ async def guess(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         update.effective_user.send_message("Sorry, the game hasn't started yet.")
 
 
+async def global_check(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    try:
+        sent_sticker = context.user_data["card_for_global_check"]
+    except KeyError:
+        update.effective_user.send_message(
+            "Sorry, for some reason bot hasn't saved a sticker in his memory."
+        )
+    bot_data: constants.BotData = context.bot_data
+    if sent_sticker in bot_data["active_cards"]:
+        update.effective_user.send_message("You got it right and got a point!")
+        bot_data["guesser"]["points"]["score"] += 1
+    else:
+        attempts = bot_data["guesser"]["points"]["attempts"]
+        if attempts > 0:
+            attempts -= 1
+            update.effective_user.send_message(
+                f"You haven't guessed correctly and spent one attempt ({attempts} left)"
+            )
+            if attempts == 0:
+                update.effective_user.send_message(
+                    "You spent all your attempts."
+                    " From now on, every wrong guess will take away one point."
+                )
+        else:
+            update.effective_user.send_message("You lost a point, be careful.")
+
+
 async def guess_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
     Parses the CallbackQuery sent by guesser from 'guess' function.
@@ -241,9 +268,21 @@ async def guess_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     If it doesn't match, guesser loses one 'attempt' (until reaches zero).
     If he has no attempts left, the point is taken from him (can go negative).
     """
-    # TODO: implement function by adding another CallbackQuery gandler
     query = update.callback_query
     await query.answer()
+
+    if query.data == "guess-yes":
+        update.effective_user.send_message("Checking your answer...")
+        # hardcoded value to make an illusion of thoughtful checking
+        sleep(1)
+        global_check(update, context)
+
+    elif query.data == "guess-no":
+        await query.edit_message_text(
+            text="This sticker will not be sent. You can continue by sending another."
+        )
+    else:
+        await query.edit_message_text(text="Something went wrong with CallbackQuery.")
 
 
 async def end_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
