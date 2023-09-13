@@ -22,6 +22,7 @@ logging.basicConfig(
 
 _DEBATER_NAME = "Debater"
 _GUESSER_NAME = "Guesser"
+# TODO: add more informative help message
 _HELP_TEXT = (
     "there should be some help, but have these at least:",
     " http://fallacymania.com/game",
@@ -286,14 +287,39 @@ async def guess_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 
 async def end_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # broadcast game results to all users
-
+    # TODO: broadcast game results to all users
     pass
 
 
-async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     help_text = "".join(_HELP_TEXT)
     await context.bot.send_message(chat_id=update.effective_chat.id, text=help_text)
+
+
+async def players(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    # TODO: resend messages with your active hand (if you're a debater)
+    pass
+
+
+async def file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    # TODO: send a message with a PDF file containing cards
+    # (mb someone will find it more convenient then sticker listing)
+    pass
+
+
+async def stickerpack(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    # TODO: send message with first sticker from a deck's stickerpack
+    pass
+
+
+async def hand(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    # TODO: resend messages with your active hand (if you're a debater)
+    pass
+
+
+async def score(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    # TODO: get a message with your points and left attempts (if you're a guesser)
+    pass
 
 
 def main() -> None:
@@ -318,9 +344,15 @@ def main() -> None:
 
     # basic game start conditions, progress and end conditions
     application.add_handler(CommandHandler("help", help))
+    application.add_handler(CommandHandler("players", players))
+    application.add_handler(CommandHandler("file", file))
+    application.add_handler(CommandHandler("stickerpack", stickerpack))
+    application.add_handler(CommandHandler("hand", hand))
+    application.add_handler(CommandHandler("score", score))
 
     # TODO: add admin function to clear all users roles,
-    # e.g. if there is too much debaters
+    # e.g. if there is too much debaters (or just use end_game, which
+    # will have different logic based on is_game_started)
 
     # during game users mostly interact by first sending card to a bot
     application.add_handler(MessageHandler(filters.Sticker.ALL, guess))
