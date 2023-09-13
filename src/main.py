@@ -52,8 +52,8 @@ async def _move_to_role(
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
-        [InlineKeyboardButton(_DEBATER_NAME, callback_data="debater")],
-        [InlineKeyboardButton(_GUESSER_NAME, callback_data="guesser")],
+        [InlineKeyboardButton(_DEBATER_NAME, callback_data="start-debater")],
+        [InlineKeyboardButton(_GUESSER_NAME, callback_data="start-guesser")],
     ]
 
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -68,10 +68,10 @@ async def start_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    if query.data == "debater":
+    if query.data == "start-debater":
         await _move_to_role("debater", update, context)
         await query.edit_message_text(text=f"You are now a {_DEBATER_NAME}")
-    elif query.data == "guesser":
+    elif query.data == "start-guesser":
         await _move_to_role("guesser", update, context)
         await query.edit_message_text(text=f"You are now a {_GUESSER_NAME}")
     else:
@@ -112,8 +112,8 @@ async def generate_hands(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         for i in range(_CARDS_PER_HAND):
             if free_deck.__len__() <= 0:
                 await update.effective_user.send_message(
-                    "free deck was emtied because there are too many debaters or"
-                    " some have too many cards. Please re-initialize the game"
+                    "free deck was emtied too soon because there are too many debaters"
+                    " or some have too many cards. Please re-initialize the game"
                 )
                 break
             else:
@@ -188,7 +188,7 @@ async def guess(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             # TODO: write code logic in respect to function comment
             pass
     else:
-        update.effective_user.send_message("Sorry, game hasn't started yet.")
+        update.effective_user.send_message("Sorry, the game hasn't started yet.")
 
 
 async def guess_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -231,13 +231,13 @@ def main() -> None:
     # choose a role when entering the room
     application.add_handler(CommandHandler("start", start))
     # TODO: CallbackQueryHandlers should use regex pattern matching of query data
-    application.add_handler(CallbackQueryHandler(start_buttons))
-
-    # TODO: add admin function to clear all users roles,
-    # e.g. if there is too much debaters
+    application.add_handler(CallbackQueryHandler(start_buttons, pattern="^start-"))
 
     # basic game start conditions, progress and end conditions
     application.add_handler(CommandHandler("help", help))
+
+    # TODO: add admin function to clear all users roles,
+    # e.g. if there is too much debaters
 
     # during game users mostly interact by first sending card to a bot
     application.add_handler(MessageHandler(filters.Sticker.ALL, guess))
