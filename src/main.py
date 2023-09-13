@@ -84,7 +84,7 @@ async def start_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     if context.bot_data["is_game_started"]:
-        update.effective_user.send_message(
+        await update.effective_user.send_message(
             "Sorry, you can't choose a role while active game is in progress."
         )
     else:
@@ -153,15 +153,24 @@ async def generate_hands(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 context.bot_data[_DEBATERS_DICT_KEY][player]["hand"].update(
                     {given_card_unique_id: message.id}
                 )
+        await context.bot.send_message(
+            chat_id=values["chat_id"],
+            text=(
+                "When saying a statement, use deck's stickerpack to activate a card."
+                " You make a card active by sending it as a sticker."
+            ),
+        )
 
 
 async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if context.bot_data["is_game_started"]:
-        update.message.reply_text("Game already in progress")
+        await update.message.reply_text("Game already in progress")
     else:
+        context.bot_data["is_game_started"] = True
+        # use a function to generate hands for debaters
         await generate_hands(update, context)
 
-        # TODO: unhardcode startes attempts
+        # TODO: unhardcode starter attempts
         # (should be a function based on rules and number of guessers)
         for player in context.bot_data[_GUESSERS_DICT_KEY]:
             context.bot_data[_GUESSERS_DICT_KEY][player]["points"]["score"] = 0
@@ -174,7 +183,6 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
                     " be able to pick a debater."
                 ),
             )
-    pass
 
 
 async def guess(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -191,35 +199,44 @@ async def guess(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     the keyboard is sent to ask, if user really meant to use this sticker.
     After confirmation, the global check is initiated in a function guess_buttons.
     """
-    data: constants.BotData = context.bot_data
-    if data["is_game_started"]:
+    debaters: constants.BotData = context.bot_data[_DEBATERS_DICT_KEY]
+    if context.bot_data["is_game_started"]:
         # if user is a debater
-        if update.effective_user.id in data[_DEBATERS_DICT_KEY]:
+        if update.effective_user.id in debaters:
             if (
                 update.effective_message.sticker.file_unique_id
-                in data[_DEBATERS_DICT_KEY]["hand"]
+                in debaters[update.effective_user.id]["hand"]
             ):
                 # add matched sticker to active cards
-                data["active_cards"].add(
+                context.bot_data["active_cards"].add(
                     update.effective_message.sticker.file_unique_id
                 )
-            else:
-                text_message: Message = update.effective_user.send_message(
-                    "You don't have this sticker in your hand."
-                    "\n(Message and sticker above will be deleted in 7 seconds)"
+                await update.effective_user.send_message(
+                    (
+                        "Card above is now active. Users may try to guess it."
+                        "\n(If you said another statement, just send a new sticker"
+                        " to change the active card.)"
+                    )
                 )
-                sleep(7)
-                update.effective_message.delete()
-                text_message.delete()
+            else:
+                text_message: Message = await update.effective_user.send_message(
+                    "You don't have this card in your hand."
+                    "\n(Message and sticker above will be deleted in 5 seconds)"
+                )
+                sleep(5)
+                await update.effective_message.delete()
+                await text_message.delete()
 
         # if user is a guesser
-        elif update.effective_user.id in data[_GUESSERS_DICT_KEY]:
+        elif update.effective_user.id in context.bot_data[_GUESSERS_DICT_KEY]:
             sticker_id = update.effective_message.sticker.file_unique_id
             context.user_data["card_for_global_check"] = sticker_id
 
             keyboard = [
-                InlineKeyboardButton("Yes", callback_data=f"guess-yes"),
-                InlineKeyboardButton("No", callback_data=f"guess-no"),
+                [
+                    InlineKeyboardButton("Yes", callback_data="guess-yes"),
+                    InlineKeyboardButton("No", callback_data="guess-no"),
+                ]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -227,38 +244,44 @@ async def guess(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 "You want to try to guess this card?:", reply_markup=reply_markup
             )
         else:
-            update.effective_user.send_message(
+            await update.effective_user.send_message(
                 "Sorry, you don't have a role in active game."
             )
     else:
-        update.effective_user.send_message("Sorry, the game hasn't started yet.")
+        await update.effective_user.send_message("Sorry, the game hasn't started yet.")
 
 
 async def global_check(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         sent_sticker = context.user_data["card_for_global_check"]
     except KeyError:
-        update.effective_user.send_message(
+        await update.effective_user.send_message(
             "Sorry, for some reason bot hasn't saved a sticker in his memory."
         )
-    bot_data: constants.BotData = context.bot_data
-    if sent_sticker in bot_data["active_cards"]:
-        update.effective_user.send_message("You got it right and got a point!")
-        bot_data["guesser"]["points"]["score"] += 1
+    my_points = context.bot_data["guesser"][update.effective_user.id]["points"]
+    if sent_sticker in context.bot_data["active_cards"]:
+        await update.effective_user.send_message("You got it right and got a point!")
+        my_points["score"] += 1
+        # TODO: remove found sticker from debater's hand,
+        # give him another free sticker (or also refresh deck if free is empty)
+        # and sanity check if all messages between old hand and
+        # new sticker are deleted. Send message after sticker, that
+        # the hand was updated with new sticker (lowest in hand).
     else:
-        attempts = bot_data["guesser"]["points"]["attempts"]
-        if attempts > 0:
-            attempts -= 1
-            update.effective_user.send_message(
+        if my_points["attempts"] > 0:
+            my_points["attempts"] -= 1
+
+            attempts = my_points["attempts"]
+            await update.effective_user.send_message(
                 f"You haven't guessed correctly and spent one attempt ({attempts} left)"
             )
-            if attempts == 0:
-                update.effective_user.send_message(
+            if my_points["attempts"] == 0:
+                await update.effective_user.send_message(
                     "You spent all your attempts."
                     " From now on, every wrong guess will take away one point."
                 )
         else:
-            update.effective_user.send_message("You lost a point, be careful.")
+            await update.effective_user.send_message("You lost a point, be careful.")
 
 
 async def guess_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -273,10 +296,10 @@ async def guess_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     await query.answer()
 
     if query.data == "guess-yes":
-        update.effective_user.send_message("Checking your answer...")
+        await update.effective_user.send_message("Checking your answer...")
         # hardcoded value to make an illusion of thoughtful checking
         sleep(1)
-        global_check(update, context)
+        await global_check(update, context)
 
     elif query.data == "guess-no":
         await query.edit_message_text(
@@ -334,7 +357,7 @@ def main() -> None:
         "is_game_started": False,
         "deck_data": entities.get_deck(),  # load deck so bot could
         # send stickers by their id
-        "active_cards": {},
+        "active_cards": set(),
     }
     application.bot_data = data
 
