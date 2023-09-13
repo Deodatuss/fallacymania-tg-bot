@@ -28,7 +28,7 @@ _HELP_TEXT = (
 
 _CARDS_PER_HAND = 5
 _DEBATERS_DICT_KEY = constants.DEBATERS_DICT_KEY
-_GESSERS_DICT_KEY = constants.GESSERS_DICT_KEY
+_GUESSERS_DICT_KEY = constants.GUESSERS_DICT_KEY
 
 
 async def _move_to_role(
@@ -42,7 +42,7 @@ async def _move_to_role(
     dict amongst average roles is not duplicated.
     """
     # admin is unique role, which is not dependent on other roles
-    role_keys = [_DEBATERS_DICT_KEY, _GESSERS_DICT_KEY]
+    role_keys = [_DEBATERS_DICT_KEY, _GUESSERS_DICT_KEY]
 
     for key in role_keys:
         # if user is already in average roles dict
@@ -64,7 +64,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ],
         [
             InlineKeyboardButton(
-                _GUESSER_NAME, callback_data=f"start-{_GESSERS_DICT_KEY}"
+                _GUESSER_NAME, callback_data=f"start-{_GUESSERS_DICT_KEY}"
             )
         ],
     ]
@@ -84,8 +84,8 @@ async def start_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query.data == f"start-{_DEBATERS_DICT_KEY}":
         await _move_to_role(_DEBATERS_DICT_KEY, update, context)
         await query.edit_message_text(text=f"You are now a {_DEBATER_NAME}")
-    elif query.data == f"start-{_GESSERS_DICT_KEY}":
-        await _move_to_role(_GESSERS_DICT_KEY, update, context)
+    elif query.data == f"start-{_GUESSERS_DICT_KEY}":
+        await _move_to_role(_GUESSERS_DICT_KEY, update, context)
         await query.edit_message_text(text=f"You are now a {_GUESSER_NAME}")
     else:
         await query.edit_message_text(
@@ -149,11 +149,15 @@ async def generate_hands(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 
 async def guess_card(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    pass
+    if context.bot_data["is_game_started"]:
+        if update.effective_user.id in context.bot_data[""]:
+            pass
+    else:
+        update.effective_user.send_message("Sorry, the game hasn't started yet.")
 
 
 async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if context.bot_data["is_game_started"] is True:
+    if context.bot_data["is_game_started"]:
         update.message.reply_text("Game already in progress")
     else:
         # generate hands and broadcast these hands to debaters
@@ -231,18 +235,17 @@ async def help(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main() -> None:
     application = ApplicationBuilder().token(get_token()).build()
 
-    # initialize player storage dicts
-    application.bot_data[_DEBATERS_DICT_KEY]: entities.Debater = {}
-    application.bot_data[_GESSERS_DICT_KEY]: entities.Guesser = {}
-    application.bot_data["admin"] = {}
-
-    # [file_unique_id, file_unique_id, ... file_unique_id]
-    application.bot_data["free_deck"] = []
-
-    # load deck so bot could send stickers by their id
-    application.bot_data["deck_data"] = entities.get_deck()
-
-    application.bot_data["is_game_started"] = False
+    # initialize storage dicts
+    data: constants.BotData = {
+        _DEBATERS_DICT_KEY: {},
+        _GUESSERS_DICT_KEY: {},
+        "admin": {},
+        "free_deck": [],  # [file_unique_id, ... file_unique_id]
+        "is_game_started": False,
+        "deck_data": entities.get_deck(),  # load deck so bot could
+        # send stickers by their id
+    }
+    application.bot_data = data
 
     # choose a role when entering the room
     application.add_handler(CommandHandler("start", start))
