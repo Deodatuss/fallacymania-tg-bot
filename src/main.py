@@ -13,6 +13,7 @@ from telegram.ext import (
 
 from get_token import get_token
 import entities
+import constants
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.WARNING
@@ -24,11 +25,14 @@ _HELP_TEXT = (
     "there should be some help, but have these at least:",
     " http://fallacymania.com/game",
 )
+
 _CARDS_PER_HAND = 5
+_DEBATERS_DICT_KEY = constants.DEBATERS_DICT_KEY
+_GESSERS_DICT_KEY = constants.GESSERS_DICT_KEY
 
 
 async def _move_to_role(
-    dict_key: str,
+    bot_data_dict_key: str,
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
 ):
@@ -37,9 +41,8 @@ async def _move_to_role(
     User can have only one role (except extra admin role), and his data inside
     dict amongst average roles is not duplicated.
     """
-    role_keys = ["debater", "guesser"]
-
-    # admins is unique role, which is not dependent on other roles
+    # admin is unique role, which is not dependent on other roles
+    role_keys = [_DEBATERS_DICT_KEY, _GESSERS_DICT_KEY]
 
     for key in role_keys:
         # if user is already in average roles dict
@@ -47,13 +50,23 @@ async def _move_to_role(
             context.bot_data[key].pop(update.effective_user.id)
 
     # add him again with specified role
-    context.bot_data[dict_key].update(entities.entity_data(update))
+    context.bot_data[bot_data_dict_key].update(
+        entities.entity_data(bot_data_dict_key, update)
+    )
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
-        [InlineKeyboardButton(_DEBATER_NAME, callback_data="start-debater")],
-        [InlineKeyboardButton(_GUESSER_NAME, callback_data="start-guesser")],
+        [
+            InlineKeyboardButton(
+                _DEBATER_NAME, callback_data=f"start-{_DEBATERS_DICT_KEY}"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                _GUESSER_NAME, callback_data=f"start-{_GESSERS_DICT_KEY}"
+            )
+        ],
     ]
 
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -64,15 +77,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def start_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Parses the CallbackQuery and updates the start message text."""
+    """Parses the start CallbackQuery and updates the start message text."""
     query = update.callback_query
     await query.answer()
 
-    if query.data == "start-debater":
-        await _move_to_role("debater", update, context)
+    if query.data == f"start-{_DEBATERS_DICT_KEY}":
+        await _move_to_role(_DEBATERS_DICT_KEY, update, context)
         await query.edit_message_text(text=f"You are now a {_DEBATER_NAME}")
-    elif query.data == "start-guesser":
-        await _move_to_role("guesser", update, context)
+    elif query.data == f"start-{_GESSERS_DICT_KEY}":
+        await _move_to_role(_GESSERS_DICT_KEY, update, context)
         await query.edit_message_text(text=f"You are now a {_GUESSER_NAME}")
     else:
         await query.edit_message_text(
@@ -117,7 +130,7 @@ async def generate_hands(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 )
                 break
             else:
-                # pop random card from a free deck
+                # pop last card from a shuffled free deck
                 given_card_unique_id = free_deck.pop()
 
                 # get file_id which is used to send a sticker
@@ -129,8 +142,8 @@ async def generate_hands(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                     chat_id=values["chat_id"], sticker=file_id
                 )
 
-                # add this unique_id and it's message_id to user's hand
-                context.bot_data["debater_hand"].update(
+                # add this unique_id and it's message_id to debater's hand
+                context.bot_data[_DEBATERS_DICT_KEY][player]["hand"].update(
                     {given_card_unique_id: message.id}
                 )
 
@@ -219,18 +232,20 @@ def main() -> None:
     application = ApplicationBuilder().token(get_token()).build()
 
     # initialize player storage dicts
-    application.bot_data["debater"] = {}
-    application.bot_data["debater_hand"] = {}
-    application.bot_data["guesser"] = {}
+    application.bot_data[_DEBATERS_DICT_KEY]: entities.Debater = {}
+    application.bot_data[_GESSERS_DICT_KEY]: entities.Guesser = {}
     application.bot_data["admin"] = {}
-    application.bot_data["is_game_started"] = False
+
+    # [file_unique_id, file_unique_id, ... file_unique_id]
     application.bot_data["free_deck"] = []
+
     # load deck so bot could send stickers by their id
     application.bot_data["deck_data"] = entities.get_deck()
 
+    application.bot_data["is_game_started"] = False
+
     # choose a role when entering the room
     application.add_handler(CommandHandler("start", start))
-    # TODO: CallbackQueryHandlers should use regex pattern matching of query data
     application.add_handler(CallbackQueryHandler(start_buttons, pattern="^start-"))
 
     # basic game start conditions, progress and end conditions
