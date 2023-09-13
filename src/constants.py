@@ -9,3 +9,6 @@ JSON_DECK_PATH = os.path.join(os.path.dirname(__file__), "../data/sticker_deck.j
 JSON_PLAYERS_PATH = os.path.join(os.path.dirname(__file__), "../config/players.json")
 
 JSON_USERS_PATH = os.path.join(os.path.dirname(__file__), "../config/players.json")
+
+DEBATERS_DICT_KEY = "debater"
+GESSERS_DICT_KEY = "guesser"
