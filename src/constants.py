@@ -42,4 +42,4 @@ class BotData(TypedDict):
     free_deck: list
     is_game_started: bool
     deck_data: dict
-    active_cards: set[str]
+    active_cards: dict[str]

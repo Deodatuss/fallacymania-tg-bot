@@ -127,6 +127,13 @@ async def generate_hands(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     for player, values in context.bot_data["debater"].items():
         await context.bot.send_message(
             chat_id=values["chat_id"],
+            text=(
+                "When saying a statement, use deck's stickerpack to activate a card."
+                " You make a card active by sending it as a sticker."
+            ),
+        )
+        await context.bot.send_message(
+            chat_id=values["chat_id"],
             text=f"Your hand have these {_CARDS_PER_HAND} cards:",
         )
         for i in range(_CARDS_PER_HAND):
@@ -153,13 +160,6 @@ async def generate_hands(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 context.bot_data[_DEBATERS_DICT_KEY][player]["hand"].update(
                     {given_card_unique_id: message.id}
                 )
-        await context.bot.send_message(
-            chat_id=values["chat_id"],
-            text=(
-                "When saying a statement, use deck's stickerpack to activate a card."
-                " You make a card active by sending it as a sticker."
-            ),
-        )
 
 
 async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -207,17 +207,32 @@ async def guess(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 update.effective_message.sticker.file_unique_id
                 in debaters[update.effective_user.id]["hand"]
             ):
+                sticker_id = update.effective_message.sticker.file_unique_id
                 # add matched sticker to active cards
-                context.bot_data["active_cards"].add(
-                    update.effective_message.sticker.file_unique_id
+                context.bot_data["active_cards"].update(
+                    {sticker_id: update.effective_user.id}
                 )
-                await update.effective_user.send_message(
+                text_message = await update.effective_user.send_message(
                     (
                         "Card above is now active. Users may try to guess it."
+                        "\nIf someone guesses correctly, you will get a new card."
                         "\n(If you said another statement, just send a new sticker"
                         " to change the active card.)"
                     )
                 )
+
+                # if old active_card is present, delete them to keep hand uncluttered
+                sleep(1)
+                sticker_msg = context.user_data.get("temp_sticker_msg_id")
+                if sticker_msg:
+                    context.bot.delete_message(update.effective_chat.id, sticker_msg)
+                sleep(0.5)
+                text_msg = context.user_data.get("temp_text_msg_id")
+                if text_msg:
+                    context.bot.delete_message(update.effective_chat.id, text_msg)
+
+                context.user_data["temp_sticker_msg_id"] = update.effective_message.id
+                context.user_data["temp_text_msg_id"] = text_message.id
             else:
                 text_message: Message = await update.effective_user.send_message(
                     "You don't have this card in your hand."
@@ -251,18 +266,58 @@ async def guess(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.effective_user.send_message("Sorry, the game hasn't started yet.")
 
 
+async def update_hand(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    sticker_id = context.user_data["card_for_global_check"]
+    bot_data: constants.BotData = context.bot_data
+    debater_id = bot_data["active_cards"][sticker_id].values
+    debater_chat_id = bot_data[_DEBATERS_DICT_KEY][debater_id]["chat_id"]
+
+    # pop guessed sticker from debater's dict hand
+    message_id = bot_data[_DEBATERS_DICT_KEY][debater_id]["hand"].pop(sticker_id)
+
+    # delete guessed sticker in debater's telegram conversation hand
+    context.bot.delete_message(debater_id, message_id)
+
+    # get new card from a free deck
+    new_card = context.bot_data["free_deck"].pop()
+
+    # clear old debater's active card messages
+    sticker_msg = context.user_data.get("temp_sticker_msg_id")
+    if sticker_msg:
+        context.bot.delete_message(debater_chat_id, sticker_msg)
+        sleep(0.5)
+    text_msg = context.user_data.get("temp_text_msg_id")
+    if text_msg:
+        context.bot.delete_message(debater_chat_id, text_msg)
+        sleep(0.5)
+    context.user_data["temp_sticker_msg_id"] = None
+    context.user_data["temp_text_msg_id"] = None
+
+    # get file_id which is used to send a sticker
+    file_id = bot_data["deck_data"]["stickers"][new_card]
+
+    # send this sticker to the debater
+    message: Message = await context.bot.send_sticker(
+        chat_id=debater_chat_id, sticker=file_id
+    )
+
+    # add this card to debater's dict hand
+    bot_data[_DEBATERS_DICT_KEY][debater_id]["hand"].update({new_card: message.id})
+
+
 async def global_check(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
-        sent_sticker = context.user_data["card_for_global_check"]
+        sticker_id = context.user_data["card_for_global_check"]
     except KeyError:
         await update.effective_user.send_message(
             "Sorry, for some reason bot hasn't saved a sticker in his memory."
         )
     my_points = context.bot_data["guesser"][update.effective_user.id]["points"]
-    if sent_sticker in context.bot_data["active_cards"]:
+    if sticker_id in context.bot_data["active_cards"]:
         await update.effective_user.send_message("You got it right and got a point!")
         my_points["score"] += 1
-        # TODO: remove found sticker from debater's hand,
+        # TODO: remove found sticker from debater's hand
+
         # give him another free sticker (or also refresh deck if free is empty)
         # and sanity check if all messages between old hand and
         # new sticker are deleted. Send message after sticker, that
@@ -352,12 +407,12 @@ def main() -> None:
     data: constants.BotData = {
         _DEBATERS_DICT_KEY: {},
         _GUESSERS_DICT_KEY: {},
-        "admin": {},
-        "free_deck": [],  # [file_unique_id, ... file_unique_id]
+        "admin": dict(),
+        "free_deck": list(),  # [file_unique_id, ... file_unique_id]
         "is_game_started": False,
         "deck_data": entities.get_deck(),  # load deck so bot could
         # send stickers by their id
-        "active_cards": set(),
+        "active_cards": dict(),
     }
     application.bot_data = data
 
