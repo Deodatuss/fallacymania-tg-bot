@@ -225,11 +225,13 @@ async def guess(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 sleep(1)
                 sticker_msg = context.user_data.get("temp_sticker_msg_id")
                 if sticker_msg:
-                    context.bot.delete_message(update.effective_chat.id, sticker_msg)
+                    await context.bot.delete_message(
+                        update.effective_chat.id, sticker_msg
+                    )
                 sleep(0.5)
                 text_msg = context.user_data.get("temp_text_msg_id")
                 if text_msg:
-                    context.bot.delete_message(update.effective_chat.id, text_msg)
+                    await context.bot.delete_message(update.effective_chat.id, text_msg)
 
                 context.user_data["temp_sticker_msg_id"] = update.effective_message.id
                 context.user_data["temp_text_msg_id"] = text_message.id
@@ -269,14 +271,14 @@ async def guess(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def update_hand(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     sticker_id = context.user_data["card_for_global_check"]
     bot_data: constants.BotData = context.bot_data
-    debater_id = bot_data["active_cards"][sticker_id].values
+    debater_id = bot_data["active_cards"][sticker_id].values()
     debater_chat_id = bot_data[_DEBATERS_DICT_KEY][debater_id]["chat_id"]
 
     # pop guessed sticker from debater's dict hand
     message_id = bot_data[_DEBATERS_DICT_KEY][debater_id]["hand"].pop(sticker_id)
 
     # delete guessed sticker in debater's telegram conversation hand
-    context.bot.delete_message(debater_id, message_id)
+    await context.bot.delete_message(debater_id, message_id)
 
     # get new card from a free deck
     new_card = context.bot_data["free_deck"].pop()
@@ -284,11 +286,11 @@ async def update_hand(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     # clear old debater's active card messages
     sticker_msg = context.user_data.get("temp_sticker_msg_id")
     if sticker_msg:
-        context.bot.delete_message(debater_chat_id, sticker_msg)
+        await context.bot.delete_message(debater_chat_id, sticker_msg)
         sleep(0.5)
     text_msg = context.user_data.get("temp_text_msg_id")
     if text_msg:
-        context.bot.delete_message(debater_chat_id, text_msg)
+        await context.bot.delete_message(debater_chat_id, text_msg)
         sleep(0.5)
     context.user_data["temp_sticker_msg_id"] = None
     context.user_data["temp_text_msg_id"] = None
@@ -366,6 +368,7 @@ async def guess_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 async def end_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # TODO: broadcast game results to all users
+    # TODO: save how many times each debater was correctly guessed
     pass
 
 
@@ -375,8 +378,19 @@ async def help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def players(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # TODO: resend messages with your active hand (if you're a debater)
-    pass
+    """list all users in a group and their roles"""
+    guesser: constants.Guesser
+    debater: constants.Debater
+    info = []
+    for user_id, debater in context.bot_data[_DEBATERS_DICT_KEY].items():
+        info.append(f'{debater["full_name"]} (@{debater["username"]}): {_DEBATER_NAME}')
+
+    for user_id, guesser in context.bot_data[_GUESSERS_DICT_KEY].items():
+        info.append(f'{guesser["full_name"]}: (@{guesser["username"]}){_GUESSER_NAME}')
+
+    text = "\n".join(info)
+
+    await update.effective_chat.send_message(text=text)
 
 
 async def file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
