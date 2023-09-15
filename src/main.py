@@ -31,6 +31,7 @@ _HELP_TEXT = (
 _CARDS_PER_HAND = 5
 _DEBATERS_DICT_KEY = constants.DEBATERS_DICT_KEY
 _GUESSERS_DICT_KEY = constants.GUESSERS_DICT_KEY
+_PDF_CARDS_PATH = constants.PDF_CARDS_PATH
 
 
 async def _move_to_role(
@@ -394,9 +395,8 @@ async def players(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # TODO: send a message with a PDF file containing cards
-    # (mb someone will find it more convenient then sticker listing)
-    pass
+    """send a message with a PDF file containing cards"""
+    await update.effective_chat.send_document(document=open(_PDF_CARDS_PATH, "rb"))
 
 
 async def stickerpack(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

@@ -11,6 +11,11 @@ JSON_PLAYERS_PATH = os.path.join(os.path.dirname(__file__), "../config/players.j
 
 JSON_USERS_PATH = os.path.join(os.path.dirname(__file__), "../config/players.json")
 
+PDF_CARDS_FILE_NAME = "Fallacymania-fallacies-rus.pdf"
+PDF_CARDS_PATH = os.path.join(
+    os.path.dirname(__file__), f"../data/{PDF_CARDS_FILE_NAME}"
+)
+
 DEBATERS_DICT_KEY = "debater"
 GUESSERS_DICT_KEY = "guesser"
 
