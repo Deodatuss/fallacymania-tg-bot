@@ -25,7 +25,7 @@ class Debater(TypedDict):
     full_name: str
     username: str
     language_code: str
-    hand: dict[str, int]
+    hand: dict[str, int]  # file_unique_id: message_id
 
 
 class Points(TypedDict):

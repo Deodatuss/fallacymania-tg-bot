@@ -222,28 +222,41 @@ async def guess(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                     )
                 )
 
+                debater_id = update.effective_user.id
+                msg = context.bot_data["temp_msg"].get(debater_id)
+                sticker_msg = None
+                text_msg = None
+                if msg:
+                    sticker_msg = msg.get("sticker_id")
+                    text_msg = msg.get("text_id")
+
                 # if old active_card is present, delete them to keep hand uncluttered
-                sleep(1)
-                sticker_msg = context.user_data.get("temp_sticker_msg_id")
                 if sticker_msg:
+                    sleep(0.5)
                     await context.bot.delete_message(
                         update.effective_chat.id, sticker_msg
                     )
-                sleep(0.5)
-                text_msg = context.user_data.get("temp_text_msg_id")
                 if text_msg:
+                    sleep(0.5)
                     await context.bot.delete_message(update.effective_chat.id, text_msg)
 
-                context.user_data["temp_sticker_msg_id"] = update.effective_message.id
-                context.user_data["temp_text_msg_id"] = text_message.id
-            else:
-                text_message: Message = await update.effective_user.send_message(
-                    "You don't have this card in your hand."
-                    "\n(Message and sticker above will be deleted in 5 seconds)"
+                context.bot_data["temp_msg"].update(
+                    {
+                        debater_id: {
+                            "sticker_id": update.effective_message.id,
+                            "text_id": text_message.id,
+                        }
+                    }
                 )
-                sleep(5)
+
+            else:
+                # text_message: Message = await update.effective_user.send_message(
+                #     "You don't have this card in your hand."
+                #     "\n(Message and sticker above will be deleted in 5 seconds)"
+                # )
+                # sleep(5)
                 await update.effective_message.delete()
-                await text_message.delete()
+                # await text_message.delete()
 
         # if user is a guesser
         elif update.effective_user.id in context.bot_data[_GUESSERS_DICT_KEY]:
@@ -272,7 +285,7 @@ async def guess(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def update_hand(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     sticker_id = context.user_data["card_for_global_check"]
     bot_data: constants.BotData = context.bot_data
-    debater_id = bot_data["active_cards"][sticker_id].values()
+    debater_id = bot_data["active_cards"][sticker_id]
     debater_chat_id = bot_data[_DEBATERS_DICT_KEY][debater_id]["chat_id"]
 
     # pop guessed sticker from debater's dict hand
@@ -285,26 +298,30 @@ async def update_hand(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     new_card = context.bot_data["free_deck"].pop()
 
     # clear old debater's active card messages
-    sticker_msg = context.user_data.get("temp_sticker_msg_id")
+    msg = context.bot_data["temp_msg"].get(debater_id)
+    sticker_msg = None
+    text_msg = None
+    if msg:
+        sticker_msg = msg.get("sticker_id")
+        text_msg = msg.get("text_id")
     if sticker_msg:
+        sleep(0.5)
         await context.bot.delete_message(debater_chat_id, sticker_msg)
-        sleep(0.5)
-    text_msg = context.user_data.get("temp_text_msg_id")
     if text_msg:
-        await context.bot.delete_message(debater_chat_id, text_msg)
         sleep(0.5)
-    context.user_data["temp_sticker_msg_id"] = None
-    context.user_data["temp_text_msg_id"] = None
-
+        await context.bot.delete_message(debater_chat_id, text_msg)
+    context.bot_data["temp_msg"].update(
+        {debater_id: {"sticker_id": None, "text_id": None}}
+    )
     # get file_id which is used to send a sticker
-    file_id = bot_data["deck_data"]["stickers"][new_card]
+    file_id = bot_data["deck_data"]["stickers"][new_card]["file_id"]
 
     # send this sticker to the debater
     message: Message = await context.bot.send_sticker(
         chat_id=debater_chat_id, sticker=file_id
     )
 
-    # add this card to debater's dict hand
+    # add this card's unique_id to debater's dict hand
     bot_data[_DEBATERS_DICT_KEY][debater_id]["hand"].update({new_card: message.id})
 
 
@@ -319,12 +336,7 @@ async def global_check(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if sticker_id in context.bot_data["active_cards"]:
         await update.effective_user.send_message("You got it right and got a point!")
         my_points["score"] += 1
-        # TODO: remove found sticker from debater's hand
-
-        # give him another free sticker (or also refresh deck if free is empty)
-        # and sanity check if all messages between old hand and
-        # new sticker are deleted. Send message after sticker, that
-        # the hand was updated with new sticker (lowest in hand).
+        await update_hand(update, context)
     else:
         if my_points["attempts"] > 0:
             my_points["attempts"] -= 1
@@ -400,13 +412,32 @@ async def file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def stickerpack(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # TODO: send message with first sticker from a deck's stickerpack
-    pass
+    """send message with first sticker from a deck's stickerpack"""
+    file_id = context.bot_data["deck_data"]["stickers"]["AgADAQADndpmHQ"]["file_id"]
+    await update.message.reply_sticker(file_id)
 
 
 async def hand(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # TODO: resend messages with your active hand (if you're a debater)
     pass
+    # if context.bot_data["is_game_started"]:
+    #     user_id = update.effective_user.id
+    #     debater: constants.Debater = context.bot_data[_DEBATERS_DICT_KEY].get(user_id)
+
+    #     if debater is not None:
+    #         await update.message.reply_text(
+    #             text=f"Your hand have these {_CARDS_PER_HAND} cards:"
+    #         )
+    #         for sticker_id, message_id in debater["hand"]:
+    #             message: Message = await context.bot.send_sticker(
+    #                 chat_id=values["chat_id"], sticker=context.bot_data.deck_data
+    #             )
+    #     else:
+    #         await update.effective_user.send_message(
+    #             "Sorry, you are not a debater and can't use this command."
+    #         )
+    # else:
+    #     await update.effective_user.send_message("Sorry, the game hasn't started yet.")
 
 
 async def score(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -422,11 +453,15 @@ def main() -> None:
         _DEBATERS_DICT_KEY: {},
         _GUESSERS_DICT_KEY: {},
         "admin": dict(),
-        "free_deck": list(),  # [file_unique_id, ... file_unique_id]
         "is_game_started": False,
-        "deck_data": entities.get_deck(),  # load deck so bot could
-        # send stickers by their id
         "active_cards": dict(),
+        # [file_unique_id, ... file_unique_id]
+        "free_deck": list(),
+        # load deck so bot could send stickers by their id
+        "deck_data": entities.get_deck(),
+        # user_id: {sticker_id: msg_id, text_id: msg_id}
+        # "temp_msg": dict[int, dict[str, int]],
+        "temp_msg": dict(),
     }
     application.bot_data = data
 
