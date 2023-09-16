@@ -382,42 +382,57 @@ async def guess_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await query.edit_message_text(text="Something went wrong with CallbackQuery.")
 
 
+async def clear_game_data(context: ContextTypes.DEFAULT_TYPE) -> None:
+    data: constants.BotData = context.bot_data
+    data["debater"] = dict()
+    data["guesser"] = dict()
+    data["active_cards"] = dict()
+    data["free_deck"] = list()
+
+
 async def end_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # TODO: broadcast game results to all users
     if context.bot_data["is_game_started"]:
-        text = "The game is ended! Now, check out the leaderboard:"
-        guessers = context.bot_data[_GUESSERS_DICT_KEY]
-        debaters = context.bot_data[_DEBATERS_DICT_KEY]
-        guess_scores = []
-        debate_scores = []
+        if "v" in context.args:  # if "/end_game v" is sent, v for verbose
+            text = "The game is ended! Now, check out the leaderboard:"
+            guessers = context.bot_data[_GUESSERS_DICT_KEY]
+            debaters = context.bot_data[_DEBATERS_DICT_KEY]
+            guess_scores = []
+            debate_scores = []
 
-        for user_id in guessers:
-            guesser: constants.Guesser = guessers[user_id]
-            guess_scores.add([guesser["full_name"], guesser["points"]["score"]])
+            for user_id in guessers:
+                guesser: constants.Guesser = guessers[user_id]
+                guess_scores.add([guesser["full_name"], guesser["points"]["score"]])
 
-        for user_id in debaters:
-            debater: constants.Debater = debaters[user_id]
-            debate_scores.add([debater["full_name"], debater["score"]])
+            for user_id in debaters:
+                debater: constants.Debater = debaters[user_id]
+                debate_scores.add([debater["full_name"], debater["score"]])
 
-        # create two leaderboards
-        guess_scores = sorted(guess_scores, key=lambda x: x[2], reverse=True)
-        debate_scores = sorted(debate_scores, key=lambda x: x[2], reverse=True)
+            # create two leaderboards
+            guess_scores = sorted(guess_scores, key=lambda x: x[2], reverse=True)
+            debate_scores = sorted(debate_scores, key=lambda x: x[2], reverse=True)
 
-        for guesser in guess_scores:
-            text += f"\n{guesser[0]}: {guesser[1]} points"
+            for guesser in guess_scores:
+                text += f"\n{guesser[0]}: {guesser[1]} points"
 
-        text += "\n"
+            text += "\n"
 
-        for debater in debate_scores:
-            text += f"\n{debater[0]}: {guesser[1]} cards used"
+            for debater in debate_scores:
+                text += f"\n{debater[0]}: {guesser[1]} cards used"
 
-        # send results for every user to see
-        for user_id in guessers:
-            guesser: constants.Guesser = guessers[user_id]
-            context.bot.send_message(chat_id=guesser["chat_id"], text=text)
-        for user_id in debaters:
-            debater: constants.Debater = debaters[user_id]
-            context.bot.send_message(chat_id=debater["chat_id"], text=text)
+            # send results for every user to see
+            for user_id in guessers:
+                guesser: constants.Guesser = guessers[user_id]
+                context.bot.send_message(chat_id=guesser["chat_id"], text=text)
+            for user_id in debaters:
+                debater: constants.Debater = debaters[user_id]
+                context.bot.send_message(chat_id=debater["chat_id"], text=text)
+
+            await clear_game_data(context)
+            context.bot_data["is_game_started"] = False
+        else:
+            await clear_game_data(context)
+            context.bot_data["is_game_started"] = False
     else:
         update.effective_chat.send_message("The game was not started yet.")
 
@@ -455,7 +470,7 @@ async def stickerpack(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 
 async def score(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # TODO: get a message with your points and left attempts (if you're a guesser)
+    """get a message with your points and left attempts (if you're a guesser)"""
     guessers = context.bot_data[_GUESSERS_DICT_KEY]
     if context.bot_data["is_game_started"]:
         id = update.effective_user.id
@@ -474,8 +489,8 @@ def main() -> None:
 
     # initialize storage dicts
     data: constants.BotData = {
-        _DEBATERS_DICT_KEY: {},
-        _GUESSERS_DICT_KEY: {},
+        _DEBATERS_DICT_KEY: dict(),
+        _GUESSERS_DICT_KEY: dict(),
         "admin": dict(),
         "is_game_started": False,
         "active_cards": dict(),
@@ -499,10 +514,6 @@ def main() -> None:
     application.add_handler(CommandHandler("file", file))
     application.add_handler(CommandHandler("stickerpack", stickerpack))
     application.add_handler(CommandHandler("score", score))
-
-    # TODO: add admin function to clear all users roles,
-    # e.g. if there is too much debaters (or just use end_game, which
-    # will have different logic based on is_game_started)
 
     # during game users mostly interact by first sending card to a bot
     application.add_handler(MessageHandler(filters.Sticker.ALL, guess))
