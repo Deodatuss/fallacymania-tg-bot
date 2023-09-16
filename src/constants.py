@@ -26,6 +26,7 @@ class Debater(TypedDict):
     username: str
     language_code: str
     hand: dict[str, int]  # file_unique_id: message_id
+    score: int  # how much cards guessed from a debater
 
 
 class Points(TypedDict):

@@ -29,6 +29,7 @@ def get_debater(update: Update) -> dict:
         "username": user.username,
         "language_code": user.language_code,
         "hand": hand,
+        "score": 0,
     }
 
     return {user.id: data}

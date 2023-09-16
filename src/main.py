@@ -200,7 +200,7 @@ async def guess(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     the keyboard is sent to ask, if user really meant to use this sticker.
     After confirmation, the global check is initiated in a function guess_buttons.
     """
-    debaters: constants.BotData = context.bot_data[_DEBATERS_DICT_KEY]
+    debaters = context.bot_data[_DEBATERS_DICT_KEY]
     if context.bot_data["is_game_started"]:
         # if user is a debater
         if update.effective_user.id in debaters:
@@ -287,6 +287,9 @@ async def update_hand(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     bot_data: constants.BotData = context.bot_data
     debater_id = bot_data["active_cards"][sticker_id]
     debater_chat_id = bot_data[_DEBATERS_DICT_KEY][debater_id]["chat_id"]
+
+    # add one point to "how much was guessed from specific debater" score
+    bot_data["debater"][debater_id]["score"] += 1
 
     # pop guessed sticker from debater's dict hand
     message_id = bot_data[_DEBATERS_DICT_KEY][debater_id]["hand"].pop(sticker_id)
@@ -381,8 +384,42 @@ async def guess_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 async def end_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # TODO: broadcast game results to all users
-    # TODO: save how many times each debater was correctly guessed
-    pass
+    if context.bot_data["is_game_started"]:
+        text = "The game is ended! Now, check out the leaderboard:"
+        guessers = context.bot_data[_GUESSERS_DICT_KEY]
+        debaters = context.bot_data[_DEBATERS_DICT_KEY]
+        guess_scores = []
+        debate_scores = []
+
+        for user_id in guessers:
+            guesser: constants.Guesser = guessers[user_id]
+            guess_scores.add([guesser["full_name"], guesser["points"]["score"]])
+
+        for user_id in debaters:
+            debater: constants.Debater = debaters[user_id]
+            debate_scores.add([debater["full_name"], debater["score"]])
+
+        # create two leaderboards
+        guess_scores = sorted(guess_scores, key=lambda x: x[2], reverse=True)
+        debate_scores = sorted(debate_scores, key=lambda x: x[2], reverse=True)
+
+        for guesser in guess_scores:
+            text += f"\n{guesser[0]}: {guesser[1]} points"
+
+        text += "\n"
+
+        for debater in debate_scores:
+            text += f"\n{debater[0]}: {guesser[1]} cards used"
+
+        # send results for every user to see
+        for user_id in guessers:
+            guesser: constants.Guesser = guessers[user_id]
+            context.bot.send_message(chat_id=guesser["chat_id"], text=text)
+        for user_id in debaters:
+            debater: constants.Debater = debaters[user_id]
+            context.bot.send_message(chat_id=debater["chat_id"], text=text)
+    else:
+        update.effective_chat.send_message("The game was not started yet.")
 
 
 async def help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -442,7 +479,17 @@ async def hand(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def score(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # TODO: get a message with your points and left attempts (if you're a guesser)
-    pass
+    guessers = context.bot_data[_GUESSERS_DICT_KEY]
+    if context.bot_data["is_game_started"]:
+        id = update.effective_user.id
+        if id in guessers:
+            user: constants.Guesser = guessers[id]
+            update.effective_chat.send_message(
+                f"You've collected {user['points']['score']} points"
+                f" and have {user['points']['score']} attempts left."
+            )
+    else:
+        await update.effective_user.send_message("Sorry, the game hasn't started yet.")
 
 
 def main() -> None:
