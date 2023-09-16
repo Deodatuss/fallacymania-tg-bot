@@ -454,29 +454,6 @@ async def stickerpack(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     await update.message.reply_sticker(file_id)
 
 
-async def hand(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # TODO: resend messages with your active hand (if you're a debater)
-    pass
-    # if context.bot_data["is_game_started"]:
-    #     user_id = update.effective_user.id
-    #     debater: constants.Debater = context.bot_data[_DEBATERS_DICT_KEY].get(user_id)
-
-    #     if debater is not None:
-    #         await update.message.reply_text(
-    #             text=f"Your hand have these {_CARDS_PER_HAND} cards:"
-    #         )
-    #         for sticker_id, message_id in debater["hand"]:
-    #             message: Message = await context.bot.send_sticker(
-    #                 chat_id=values["chat_id"], sticker=context.bot_data.deck_data
-    #             )
-    #     else:
-    #         await update.effective_user.send_message(
-    #             "Sorry, you are not a debater and can't use this command."
-    #         )
-    # else:
-    #     await update.effective_user.send_message("Sorry, the game hasn't started yet.")
-
-
 async def score(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # TODO: get a message with your points and left attempts (if you're a guesser)
     guessers = context.bot_data[_GUESSERS_DICT_KEY]
@@ -521,7 +498,6 @@ def main() -> None:
     application.add_handler(CommandHandler("players", players))
     application.add_handler(CommandHandler("file", file))
     application.add_handler(CommandHandler("stickerpack", stickerpack))
-    application.add_handler(CommandHandler("hand", hand))
     application.add_handler(CommandHandler("score", score))
 
     # TODO: add admin function to clear all users roles,
