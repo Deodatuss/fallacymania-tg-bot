@@ -111,6 +111,8 @@ async def generate_free_deck(
     """
     deck_stickers = context.bot_data["deck_data"]["stickers"]
     deck = [key for key in deck_stickers]
+    # deck = deck[:15] # if needs to take first three rows
+
     random.shuffle(deck)
     return deck
 
@@ -180,8 +182,8 @@ async def start_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             await context.bot.send_message(
                 chat_id=context.bot_data[_GUESSERS_DICT_KEY][player]["chat_id"],
                 text=(
-                    "Game started. Send cards you want to guess, then you'll"
-                    " be able to pick a debater."
+                    "Game started. Send cards you want to guess, then it"
+                    " will be compared against debaters."
                 ),
             )
 
@@ -297,8 +299,19 @@ async def update_hand(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     # delete guessed sticker in debater's telegram conversation hand
     await context.bot.delete_message(debater_id, message_id)
 
+    # pop sticker from active cards
+    context.bot_data["active_cards"].pop(sticker_id, None)
+
     # get new card from a free deck
-    new_card = context.bot_data["free_deck"].pop()
+    if context.bot_data["free_deck"].__len__() == 0:
+        context.bot_data["free_deck"] = await generate_free_deck(update, context)
+
+    # iterate until card not currently in debater's hand is found, then add new
+    for card in bot_data["free_deck"][::-1]:
+        if card not in bot_data["debater"][debater_id]["hand"]:
+            new_card = card
+            context.bot_data["free_deck"].remove(card)
+            break
 
     # clear old debater's active card messages
     msg = context.bot_data["temp_msg"].get(debater_id)
@@ -369,7 +382,7 @@ async def guess_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     await query.answer()
 
     if query.data == "guess-yes":
-        await update.effective_user.send_message("Checking your answer...")
+        await query.edit_message_text(text="Checking your answer...")
         # hardcoded value to make an illusion of thoughtful checking
         sleep(1)
         await global_check(update, context)
@@ -393,7 +406,10 @@ async def clear_game_data(context: ContextTypes.DEFAULT_TYPE) -> None:
 async def end_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # TODO: broadcast game results to all users
     if context.bot_data["is_game_started"]:
-        if "v" in context.args:  # if "/end_game v" is sent, v for verbose
+        if "s" in context.args:  # if "/end_game s" is sent, s for silent
+            await clear_game_data(context)
+            context.bot_data["is_game_started"] = False
+        else:
             text = "The game is ended! Now, check out the leaderboard:"
             guessers = context.bot_data[_GUESSERS_DICT_KEY]
             debaters = context.bot_data[_DEBATERS_DICT_KEY]
@@ -402,15 +418,15 @@ async def end_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
             for user_id in guessers:
                 guesser: constants.Guesser = guessers[user_id]
-                guess_scores.add([guesser["full_name"], guesser["points"]["score"]])
+                guess_scores.append([guesser["full_name"], guesser["points"]["score"]])
 
             for user_id in debaters:
                 debater: constants.Debater = debaters[user_id]
-                debate_scores.add([debater["full_name"], debater["score"]])
+                debate_scores.append([debater["full_name"], debater["score"]])
 
             # create two leaderboards
-            guess_scores = sorted(guess_scores, key=lambda x: x[2], reverse=True)
-            debate_scores = sorted(debate_scores, key=lambda x: x[2], reverse=True)
+            guess_scores = sorted(guess_scores, key=lambda x: x[1], reverse=True)
+            debate_scores = sorted(debate_scores, key=lambda x: x[1], reverse=True)
 
             for guesser in guess_scores:
                 text += f"\n{guesser[0]}: {guesser[1]} points"
@@ -423,18 +439,15 @@ async def end_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             # send results for every user to see
             for user_id in guessers:
                 guesser: constants.Guesser = guessers[user_id]
-                context.bot.send_message(chat_id=guesser["chat_id"], text=text)
+                await context.bot.send_message(chat_id=guesser["chat_id"], text=text)
             for user_id in debaters:
                 debater: constants.Debater = debaters[user_id]
-                context.bot.send_message(chat_id=debater["chat_id"], text=text)
+                await context.bot.send_message(chat_id=debater["chat_id"], text=text)
 
             await clear_game_data(context)
             context.bot_data["is_game_started"] = False
-        else:
-            await clear_game_data(context)
-            context.bot_data["is_game_started"] = False
     else:
-        update.effective_chat.send_message("The game was not started yet.")
+        await update.effective_chat.send_message("The game was not started yet.")
 
 
 async def help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -476,7 +489,7 @@ async def score(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         id = update.effective_user.id
         if id in guessers:
             user: constants.Guesser = guessers[id]
-            update.effective_chat.send_message(
+            await update.effective_chat.send_message(
                 f"You've collected {user['points']['score']} points"
                 f" and have {user['points']['score']} attempts left."
             )
